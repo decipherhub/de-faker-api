@@ -103,4 +103,19 @@ const TradeEvent = sequelize.define('TradeEvent', {
   }
 })
 
-module.exports = {Sequelize, sequelize, ActiveUser, DepositEvent, WithdrawEvent, TradeEvent}
+const BlockInfo = sequelize.define('BlockInfo', {
+  blockHash: {
+    type: Sequelize.STRING,
+    allowNull: false
+  },
+  blockNumber: {
+    type: Sequelize.INTEGER,
+    allowNull: false
+  },
+  transactionList: {
+    type: Sequelize.TEXT('long'),
+    allowNull: false
+  }
+})
+
+module.exports = {Sequelize, sequelize, ActiveUser, DepositEvent, WithdrawEvent, TradeEvent, BlockInfo}

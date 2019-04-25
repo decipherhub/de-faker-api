@@ -243,10 +243,10 @@ const getDepositEvents = async (req, res) => {
     let bulkArray = [];
     let dataDict;
 
-    for(let i = firstBlockNumber; i <= lastBlockNumber; i+=100){
+    for(let i = firstBlockNumber; i <= lastBlockNumber; i+=3000){
       contract.getPastEvents('Deposit', {
         fromBlock: i,
-        toBlock: i+100
+        toBlock: i+3000
       }, (error, events) => {
         events.forEach((result) => {
           dataDict = {}
@@ -258,9 +258,12 @@ const getDepositEvents = async (req, res) => {
         });
         models.DepositEvent.bulkCreate(bulkArray).then(() => {
           console.log('Successfully bulk insert for deposit event');
+        }).catch((err) => {
+          console.log('Occur fucked error !! ' + err);  
         });
         bulkArray = [];
       });
+      console.log('Running get Deposit Event');
     }
     res.status(200).json({
       'resMessage': 'Successfully call function'
@@ -282,10 +285,10 @@ const getWithdrawEvents = async (req, res) => {
     let bulkArray = [];
     let dataDict;
 
-    for(let i = firstBlockNumber; i <= lastBlockNumber; i+=100){
+    for(let i = firstBlockNumber; i <= lastBlockNumber; i+=3000){
       contract.getPastEvents('Withdraw', {
         fromBlock: i,
-        toBlock: i+100
+        toBlock: i+3000
       }, (error, events) => {
         events.forEach((result) => {
           dataDict = {}
@@ -300,6 +303,7 @@ const getWithdrawEvents = async (req, res) => {
         });
         bulkArray = [];
       });
+      console.log('Running Get Withdraw Event !');
     }
     res.status(200).json({
       'resMessage': 'Successfully call function'
@@ -332,20 +336,16 @@ const startTransferTracking = (req, res) => {
 
 const getWalletList = async (req, res) => {
   let contractAddress = req.params.contractAddress;
-  scanEndpoint = scanEndpoint + contractAddress;
 
-  let contract = new web3.eth.Contract(erc20abi, contractAddress);
-  
-  let lastBlockNumber = await web3.eth.getBlockNumber();
-  let firstBlockNumber = lastBlockNumber - 129600;
+  let fromBlock = req.params.fromBlock;
+  let toBlock = req.params.toBlock;
   let blockInfo;
 
-  for(let i = firstBlockNumber; i <= lastBlockNumber; i++){
+  for(let i = fromBlock; i <= toBlock; i++){
     blockInfo = await web3.eth.getBlock(i);
     transactions = blockInfo.transactions;
     transactions.forEach((transaction) => {
       web3.eth.getTransaction(transaction).then((receipt) => {
-        console.log(receipt);
         if(receipt.from === contractAddress || receipt.to === contractAddress){
           models.ActiveUser.create({
             transactionHash: transaction,
@@ -358,6 +358,7 @@ const getWalletList = async (req, res) => {
         }
       });
     });
+    console.log('Running Get Wallet List');
   }
   res.status(200).json({
     'resMessage': 'Finish Getting last 30days Active user list'
@@ -365,13 +366,9 @@ const getWalletList = async (req, res) => {
 }
 
 const getTraderList = async (req, res) => {
-  let contractAddress = req.params.contractAddress;
-  scanEndpoint = scanEndpoint + contractAddress;
-
-  let contract = new web3.eth.Contract(erc20abi, contractAddress);
+  let fromBlock = req.params.fromBlock;
+  let toBlock = req.params.toBlock;
   
-  let lastBlockNumber = await web3.eth.getBlockNumber();
-  let firstBlockNumber = lastBlockNumber - 129600;
   let blockInfo;
 
   let amountBuy;
@@ -383,13 +380,13 @@ const getTraderList = async (req, res) => {
   let makerAddress;
   let takerAddress;
 
-  for(let i = firstBlockNumber; i <= lastBlockNumber; i++){
+  for(let i = fromBlock; i <= toBlock; i++){
     blockInfo = await web3.eth.getBlock(i);
     transactions = blockInfo.transactions;
     transactions.forEach((transaction) => {
       web3.eth.getTransaction(transaction).then((receipt) => {
         if(receipt.input.slice(0,10) === "0xef343588"){ // trade function signature
-          console.log(receipt);
+          console.log('Match Trade Function !');
           amountBuy = web3.utils.hexToNumberString('0x' + receipt.input.slice(10, 74));
           amountSell = web3.utils.hexToNumberString('0x' + receipt.input.slice(74, 138));
           amount = web3.utils.hexToNumberString('0x' + receipt.input.slice(266, 330));
@@ -412,11 +409,34 @@ const getTraderList = async (req, res) => {
         }
       });
     });
-    console.log(blockInfo);
+    console.log('Running Trader function');
   }
 }
 
+
+const getBlockInfo = async (req, res) => {
+  let fromBlock = req.params.fromBlock;
+  let toBlock = req.params.toBlock;
+  
+  let blockInfo;
+
+  for(let i = fromBlock; i <= toBlock; i++){
+    blockInfo = await web3.eth.getBlock(i);
+    models.BlockInfo.create({
+      blockHash: blockInfo.hash,
+      blockNumber: i, 
+      transactionList: JSON.stringify(JSON.stringify(blockInfo.transactions))
+    }).then(block => {
+      console.log('Successfully create block !');
+    });
+  }
+  res.status(200).json({
+    'resMessage': 'Successfully Get Block Information'
+  });
+}
+
+
 module.exports = {
   getDepositEvents, getWithdrawEvents, startTransferTracking, getWalletList,
-  getTraderList
+  getTraderList, getBlockInfo
 }
