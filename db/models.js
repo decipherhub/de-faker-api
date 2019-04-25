@@ -33,7 +33,7 @@ const ActiveUser = sequelize.define('ActiveUser', {
 const DepositEvent = sequelize.define('DepositEvent', {
   transactionHash: {
     type: Sequelize.STRING,
-    allowNull: false,
+    allowNull: false
   },
   senderAddress: {
     type: Sequelize.STRING,
@@ -52,7 +52,7 @@ const DepositEvent = sequelize.define('DepositEvent', {
 const WithdrawEvent = sequelize.define('WithdrawEvent', {
   transactionHash: {
     type: Sequelize.STRING,
-    allowNull: false,
+    allowNull: false
   },
   senderAddress: {
     type: Sequelize.STRING,
@@ -68,4 +68,39 @@ const WithdrawEvent = sequelize.define('WithdrawEvent', {
   }
 })
 
-module.exports = {Sequelize, sequelize, ActiveUser, DepositEvent, WithdrawEvent}
+const TradeEvent = sequelize.define('TradeEvent', {
+  transactionHash: {
+    type: Sequelize.STRING,
+    allowNull: false
+  },
+  amountBuy: {
+    type: Sequelize.DOUBLE,
+    allowNull: false
+  },
+  amountSell: {
+    type: Sequelize.DOUBLE,
+    allowNull: false
+  },
+  amount: {
+    type: Sequelize.DOUBLE,
+    allowNull: false
+  },
+  tokenBuyAddress: {
+    type: Sequelize.STRING,
+    allowNull: false
+  },
+  tokenSellAddress: {
+    type: Sequelize.STRING,
+    allowNull: false
+  },
+  maker: {
+    type: Sequelize.STRING,
+    allowNull: false
+  },
+  taker: {
+    type: Sequelize.STRING,
+    allowNull: false
+  }
+})
+
+module.exports = {Sequelize, sequelize, ActiveUser, DepositEvent, WithdrawEvent, TradeEvent}
