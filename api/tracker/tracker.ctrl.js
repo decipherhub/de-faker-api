@@ -115,7 +115,7 @@ const getWithdrawEvents = async (req, res) => {
         events.forEach((result) => {
           dataDict = {}
           dataDict['transactionHash'] = result.transactionHash;
-          dataDict['senderAddress'] = result.returnValues.user;
+          dataDict['receiverAddress'] = result.returnValues.user;
           dataDict['tokenAddress'] = result.returnValues.token;
           dataDict['amount'] = parseInt(result.returnValues.amount._hex) / 1000000000000000000;
           bulkArray.push(dataDict);
@@ -162,6 +162,69 @@ const startTransferTracking = (req, res) => {
 }
 
 
+const depositTracking = async (req, res) => {
+  let contractAddress = req.params.contractAddress;
+  scanEndpoint = scanEndpoint + contractAddress;
+
+  request.get({url: scanEndpoint}, (err, response, body) => {
+    let contractABI = JSON.parse(body).result;
+    let jsonABI = JSON.parse(contractABI);
+    let contract = new web3.eth.Contract(jsonABI, contractAddress);
+    contract.events.Deposit({
+      fromBlock: 'latest',
+    }, (err, res) => {
+      //console.log(res);
+    })
+    .on('data', (res) => {
+      console.log(res);
+      models.DepositEvent.create({
+        transactionHash: res.transactionHash,
+        senderAddress: res.returnValues.user,
+        tokenAddress: res.returnValues.token,
+        amount: parseInt(res.returnValues.amount._hex) / 1000000000000000000
+      }).then(dEvent => {
+        console.log('Successfully insert new deposit event');  
+      });
+    }) 
+    res.status(200).json({
+      'resMessage': 'Start Deposit Event Tracking'
+    }); 
+  });
+}
+
+
+const withdrawTracking = async (req, res) => {
+  let contractAddress = req.params.contractAddress;
+  scanEndpoint = scanEndpoint + contractAddress;
+
+  request.get({url: scanEndpoint}, (err, response, body) => {
+    let contractABI = JSON.parse(body).result;
+    let jsonABI = JSON.parse(contractABI);
+    let contract = new web3.eth.Contract(jsonABI, contractAddress);
+    contract.events.Withdraw({
+      fromBlock: 'latest'
+    }, (err, res) => {
+      //console.log(res);
+    })
+    .on('data', (res) => {
+      console.log(res);
+      models.WithdrawEvent.create({
+        transactionHash: res.transactionHash,
+        receiverAddress: res.returnValues.user,
+        tokenAddress: res.returnValues.token,
+        amount: parseInt(res.returnValues.amount._hex) / 1000000000000000000
+      }).then(wEvent => {
+        console.log('Successfully insert new withdraw event');
+      });
+    })
+    res.status(200).json({
+      'resMessage': 'Start Withdraw Event Tracking'
+    });
+  });
+}
+
+
+
 const getTraderList = async (req, res) => {
   let fromBlock = req.params.fromBlock;
   let toBlock = req.params.toBlock;
@@ -184,9 +247,9 @@ const getTraderList = async (req, res) => {
       web3.eth.getTransaction(transaction).then((receipt) => {
         if(receipt.input.slice(0,10) === "0xef343588"){ // trade function signature
           console.log('Match Trade Function !');
-          amountBuy = web3.utils.hexToNumberString('0x' + receipt.input.slice(10, 74));
-          amountSell = web3.utils.hexToNumberString('0x' + receipt.input.slice(74, 138));
-          amount = web3.utils.hexToNumberString('0x' + receipt.input.slice(266, 330));
+          amountBuy = web3.utils.hexToNumberString('0x' + receipt.input.slice(10, 74)) / 1000000000000000000;
+          amountSell = web3.utils.hexToNumberString('0x' + receipt.input.slice(74, 138)) / 1000000000000000000;
+          amount = web3.utils.hexToNumberString('0x' + receipt.input.slice(266, 330)) / 1000000000000000000;
           tokenBuyAddress = receipt.input.slice(546 ,586);
           tokenSellAddress = receipt.input.slice(610 ,650);
           makerAddress = receipt.input.slice(674, 714);
@@ -234,6 +297,14 @@ const getBlockInfo = async (req, res) => {
 
 const subscribePending = async (req, res) => {
   let contractAddress = req.params.contractAddress;
+  let amountBuy;
+  let amountSell;
+  let amount;
+
+  let tokenBuyAddress;
+  let tokenSellAddress;
+  let makerAddress;
+  let takerAddress;
   subscription = web3.eth.subscribe('pendingTransactions', (err, res) => {
     if(!error){
       //console.log(res);
@@ -241,8 +312,8 @@ const subscribePending = async (req, res) => {
   })
   .on("data", (transaction) => {
     web3.eth.getTransaction(transaction).then((receipt) => {
-      try{
-        if( (receipt.from === contractAddress || receipt.to === contractAddress) && (receipt !== null) ){
+      if(receipt !== null){
+        if( (receipt.from === contractAddress || receipt.to === contractAddress) ){
           models.ActiveUser.create({
             transactionHash: transaction,
             fromAddress: receipt.from,
@@ -250,14 +321,29 @@ const subscribePending = async (req, res) => {
           }).then((activeUser) => {
             console.log('Successfully insert active user from pendingTransaction');
           });
+          if(receipt.input.slice(0,10) === "0xef343588"){ // trade function signature
+            amountBuy = web3.utils.hexToNumberString('0x' + receipt.input.slice(10, 74)) / 1000000000000000000;
+            amountSell = web3.utils.hexToNumberString('0x' + receipt.input.slice(74, 138)) / 1000000000000000000;
+            amount = web3.utils.hexToNumberString('0x' + receipt.input.slice(266, 330)) / 1000000000000000000;
+            tokenBuyAddress = receipt.input.slice(546 ,586);
+            tokenSellAddress = receipt.input.slice(610 ,650);
+            makerAddress = receipt.input.slice(674, 714);
+            takerAddress = receipt.input.slice(738, 778);
+            models.TradeEvent.create({
+              transactionHash: transaction,
+              amountBuy: amountBuy,
+              amountSell: amountSell,
+              amount: amount,
+              tokenBuyAddress: tokenBuyAddress,
+              tokenSellAddress: tokenSellAddress,
+              maker: makerAddress,
+              taker: takerAddress 
+            }).then(trade => {
+              console.log('Successfully create trade history');
+            });
+          }
         }
       }
-      catch(exception){
-        console.log(exception);
-        console.log(receipt);
-        console.log(transaction);
-      }
-      console.log('Running subscribe');
     });
   });
   res.status(200).json({
@@ -283,5 +369,5 @@ const unsubscribePending = async (req, res) => {
 module.exports = {
   getDepositEvents, getWithdrawEvents, startTransferTracking,
   getTraderList, getBlockInfo, getActiveUsers,
-  subscribePending, unsubscribePending
+  subscribePending, unsubscribePending, depositTracking, withdrawTracking
 }

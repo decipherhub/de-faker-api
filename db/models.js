@@ -49,7 +49,7 @@ const WithdrawEvent = sequelize.define('WithdrawEvent', {
     type: Sequelize.STRING,
     allowNull: false
   },
-  senderAddress: {
+  receiverAddress: {
     type: Sequelize.STRING,
     allowNull: false
   },

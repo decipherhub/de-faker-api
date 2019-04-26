@@ -14,4 +14,7 @@ router.get('/block/:fromBlock/:toBlock', ctrl.getBlockInfo);
 router.get('/subscribe/:contractAddress/transactions/pending', ctrl.subscribePending);
 router.get('/unsubscribe/:contractAddress/transactions/pending', ctrl.unsubscribePending);
 
+router.get('/subscribe/event/:contractAddress/deposit', ctrl.depositTracking);
+router.get('/subscribe/event/:contractAddress/withdraw', ctrl.withdrawTracking);
+
 module.exports = router;
