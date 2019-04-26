@@ -6,6 +6,7 @@ const web3 = new Web3( new Web3.providers.WebsocketProvider(INFURA_URL));
 const models = require('../../db/models');
 
 let scanEndpoint = "https://api.etherscan.io/api?module=contract&action=getabi&address=";
+let subscription;
 
 const getDepositEvents = async (req, res) => {
   let contractAddress = req.params.contractAddress;
@@ -231,8 +232,56 @@ const getBlockInfo = async (req, res) => {
   });
 }
 
+const subscribePending = async (req, res) => {
+  let contractAddress = req.params.contractAddress;
+  subscription = web3.eth.subscribe('pendingTransactions', (err, res) => {
+    if(!error){
+      //console.log(res);
+    }
+  })
+  .on("data", (transaction) => {
+    web3.eth.getTransaction(transaction).then((receipt) => {
+      try{
+        if( (receipt.from === contractAddress || receipt.to === contractAddress) && (receipt !== null) ){
+          models.ActiveUser.create({
+            transactionHash: transaction,
+            fromAddress: receipt.from,
+            toAddress: receipt.to 
+          }).then((activeUser) => {
+            console.log('Successfully insert active user from pendingTransaction');
+          });
+        }
+      }
+      catch(exception){
+        console.log(exception);
+        console.log(receipt);
+        console.log(transaction);
+      }
+      console.log('Running subscribe');
+    });
+  });
+  res.status(200).json({
+    'resMessage': 'Start Subscribing pendingTransaction!'
+  });
+}
+
+const unsubscribePending = async (req, res) => {
+  subscription.unsubscribe((err, success) => {
+    if(success){
+      console.log('Successfully unsubscribed!');
+    }
+    else{
+      console.log('failed unsubscribed!');
+    }
+  });
+  res.status(200).json({
+    'resMessage': 'Successfully unsubscribe'
+  });
+}
+
 
 module.exports = {
   getDepositEvents, getWithdrawEvents, startTransferTracking,
-  getTraderList, getBlockInfo, getActiveUsers
+  getTraderList, getBlockInfo, getActiveUsers,
+  subscribePending, unsubscribePending
 }
