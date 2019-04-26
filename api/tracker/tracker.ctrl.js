@@ -7,229 +7,6 @@ const models = require('../../db/models');
 
 let scanEndpoint = "https://api.etherscan.io/api?module=contract&action=getabi&address=";
 
-const erc20abi = [
-    {
-        "constant": true,
-        "inputs": [],
-        "name": "name",
-        "outputs": [
-            {
-                "name": "",
-                "type": "string"
-            }
-        ],
-        "payable": false,
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "constant": false,
-        "inputs": [
-            {
-                "name": "_spender",
-                "type": "address"
-            },
-            {
-                "name": "_value",
-                "type": "uint256"
-            }
-        ],
-        "name": "approve",
-        "outputs": [
-            {
-                "name": "",
-                "type": "bool"
-            }
-        ],
-        "payable": false,
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "inputs": [],
-        "name": "totalSupply",
-        "outputs": [
-            {
-                "name": "",
-                "type": "uint256"
-            }
-        ],
-        "payable": false,
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "constant": false,
-        "inputs": [
-            {
-                "name": "_from",
-                "type": "address"
-            },
-            {
-                "name": "_to",
-                "type": "address"
-            },
-            {
-                "name": "_value",
-                "type": "uint256"
-            }
-        ],
-        "name": "transferFrom",
-        "outputs": [
-            {
-                "name": "",
-                "type": "bool"
-            }
-        ],
-        "payable": false,
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "inputs": [],
-        "name": "decimals",
-        "outputs": [
-            {
-                "name": "",
-                "type": "uint8"
-            }
-        ],
-        "payable": false,
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "inputs": [
-            {
-                "name": "_owner",
-                "type": "address"
-            }
-        ],
-        "name": "balanceOf",
-        "outputs": [
-            {
-                "name": "balance",
-                "type": "uint256"
-            }
-        ],
-        "payable": false,
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "inputs": [],
-        "name": "symbol",
-        "outputs": [
-            {
-                "name": "",
-                "type": "string"
-            }
-        ],
-        "payable": false,
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "constant": false,
-        "inputs": [
-            {
-                "name": "_to",
-                "type": "address"
-            },
-            {
-                "name": "_value",
-                "type": "uint256"
-            }
-        ],
-        "name": "transfer",
-        "outputs": [
-            {
-                "name": "",
-                "type": "bool"
-            }
-        ],
-        "payable": false,
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "inputs": [
-            {
-                "name": "_owner",
-                "type": "address"
-            },
-            {
-                "name": "_spender",
-                "type": "address"
-            }
-        ],
-        "name": "allowance",
-        "outputs": [
-            {
-                "name": "",
-                "type": "uint256"
-            }
-        ],
-        "payable": false,
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "payable": true,
-        "stateMutability": "payable",
-        "type": "fallback"
-    },
-    {
-        "anonymous": false,
-        "inputs": [
-            {
-                "indexed": true,
-                "name": "owner",
-                "type": "address"
-            },
-            {
-                "indexed": true,
-                "name": "spender",
-                "type": "address"
-            },
-            {
-                "indexed": false,
-                "name": "value",
-                "type": "uint256"
-            }
-        ],
-        "name": "Approval",
-        "type": "event"
-    },
-    {
-        "anonymous": false,
-        "inputs": [
-            {
-                "indexed": true,
-                "name": "from",
-                "type": "address"
-            },
-            {
-                "indexed": true,
-                "name": "to",
-                "type": "address"
-            },
-            {
-                "indexed": false,
-                "name": "value",
-                "type": "uint256"
-            }
-        ],
-        "name": "Transfer",
-        "type": "event"
-    }
-]
-
 const getDepositEvents = async (req, res) => {
   let contractAddress = req.params.contractAddress;
   scanEndpoint = scanEndpoint + contractAddress;
@@ -270,6 +47,50 @@ const getDepositEvents = async (req, res) => {
     });
   });
 }
+
+const getActiveUsers = async (req, res) => {
+  let contractAddress = req.params.contractAddress;
+  scanEndpoint = scanEndpoint + contractAddress;
+
+  let lastBlockNumber = await web3.eth.getBlockNumber();
+  let firstBlockNumber = lastBlockNumber - 129600;
+  request.get({url: scanEndpoint}, (err, respone, body) => {
+    let contractABI = JSON.parse(body).result;
+    let jsonABI = JSON.parse(contractABI);
+    let contract = new web3.eth.Contract(jsonABI, contractAddress);
+    let bulkArray = [];
+    let dataDict;
+
+    for(let i = firstBlockNumber; i <= lastBlockNumber; i+=3000){
+      contract.getPastEvents('Deposit', {
+        fromBlock: i,
+        toBlock: i+3000
+      }, (error, events) => {
+        //console.log(events);
+      })
+      .then((events) => {
+        events.forEach((result) => {
+          dataDict = {};
+          dataDict['transactionHash'] = result.transactionHash;
+          dataDict['fromAddress' ] = result.returnValues.user;
+          dataDict['toAddress'] = result.address;
+          bulkArray.push(dataDict);
+        });
+        models.ActiveUser.bulkCreate(bulkArray).then(() => {
+          console.log('Successfully bulk insert for active user');
+        }).then((err) => {
+          console.log('Successfully fucked error ' + err);
+        });
+        bulkArray = [];
+      });
+      console.log('Running get Deposit Event for Getting active users');
+    }
+    res.status(200).json({
+      'resMessage': 'Successfully call function'
+    });
+  });
+}
+
 
 
 const getWithdrawEvents = async (req, res) => {
@@ -314,56 +135,31 @@ const getWithdrawEvents = async (req, res) => {
 
 const startTransferTracking = (req, res) => {
   let contractAddress = req.params.contractAddress;
-  let contract = new web3.eth.Contract(erc20abi, contractAddress);
+  scanEndpoint = scanEndpoint + contractAddress;
 
-  contract.events.Transfer({
-    fromBlock: 'latest',
-  }, (err, res) => {
-    console.log(res);
-  })
-  .on('data', (res) => {
-    console.log(res);
-  })
-  .on('changed', (res) => {
-    console.log(res);
-  })
-  .on('error', console.error);
+  request.get({url: scanEndpoint}, (err, response, body) => {
+    let contractABI = JSON.parse(body).result;
+    let jsonABI = JSON.parse(contractABI);
+    let contract = new web3.eth.Contract(jsonABI, contractAddress);
+    contract.events.Transfer({
+      fromBlock: 'latest',
+    }, (err, res) => {
+      console.log(res);
+    })
+    .on('data', (res) => {
+      console.log(res);
+    })
+    .on('changed', (res) => {
+      console.log(res);
+    })
+    .on('error', console.error);
 
-  res.status(200).json({
-    'resMessage': 'start Transfer Tracking'
-  });
-}
-
-const getWalletList = async (req, res) => {
-  let contractAddress = req.params.contractAddress;
-
-  let fromBlock = req.params.fromBlock;
-  let toBlock = req.params.toBlock;
-  let blockInfo;
-
-  for(let i = fromBlock; i <= toBlock; i++){
-    blockInfo = await web3.eth.getBlock(i);
-    transactions = blockInfo.transactions;
-    transactions.forEach((transaction) => {
-      web3.eth.getTransaction(transaction).then((receipt) => {
-        if(receipt.from === contractAddress || receipt.to === contractAddress){
-          models.ActiveUser.create({
-            transactionHash: transaction,
-            blockNumber: i,
-            fromAddress: receipt.from,
-            toAddress: receipt.to
-          }).then(activeUser => {
-            console.log('Successfully create Active user(not sender)');
-          });
-        }
-      });
+    res.status(200).json({
+      'resMessage': 'start Transfer Tracking'
     });
-    console.log('Running Get Wallet List');
-  }
-  res.status(200).json({
-    'resMessage': 'Finish Getting last 30days Active user list'
   });
 }
+
 
 const getTraderList = async (req, res) => {
   let fromBlock = req.params.fromBlock;
@@ -437,6 +233,6 @@ const getBlockInfo = async (req, res) => {
 
 
 module.exports = {
-  getDepositEvents, getWithdrawEvents, startTransferTracking, getWalletList,
-  getTraderList, getBlockInfo
+  getDepositEvents, getWithdrawEvents, startTransferTracking,
+  getTraderList, getBlockInfo, getActiveUsers
 }

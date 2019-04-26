@@ -13,11 +13,6 @@ const sequelize = new Sequelize(faker_db, db_username, db_password, {
 const ActiveUser = sequelize.define('ActiveUser', {
   transactionHash: {
     type: Sequelize.STRING,
-    allowNull: false,
-    unique: true
-  },
-  blockNumber: {
-    type: Sequelize.INTEGER,
     allowNull: false
   },
   fromAddress: {
