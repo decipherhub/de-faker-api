@@ -3,6 +3,8 @@ const INFURA_URL = "wss://mainnet.infura.io/ws";
 const request = require('request');
 const web3 = new Web3( new Web3.providers.WebsocketProvider(INFURA_URL));
 
+const paginate = require('express-paginate');
+
 const models = require('../../db/models');
 
 let scanEndpoint = "https://api.etherscan.io/api?module=contract&action=getabi&address=";
